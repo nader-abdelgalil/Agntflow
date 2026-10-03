@@ -4,8 +4,7 @@ n8n_data/
 .n8n/
 
 # Explicitly track env examples
-dev/
-docker-compose.yml
+docs/
 
 ### Database ###
 *.accdb

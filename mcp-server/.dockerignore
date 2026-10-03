@@ -23,9 +23,6 @@ test/
 # ==========================================
 # 2. Append gitignore.io Output Below
 # ==========================================
-
-dev/
-
 ### Database ###
 *.sqlite
 *.accdb
@@ -303,4 +300,3 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/node,visualstudiocode,redis,database,windows,macos,linux
