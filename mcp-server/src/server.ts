@@ -210,3 +210,7 @@ app.all("/mcp", async (req: Request, res: Response) => {
 app.listen(3001, "0.0.0.0", () => {
     console.log(`MCP server is running on http://localhost:3001/mcp`);
 });
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});

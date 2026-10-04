@@ -3,15 +3,20 @@ services:
     image: postgres:18-alpine
     container_name: pm-postgres
     restart: unless-stopped
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      MCP_DB_PASSWORD: ${MCP_DB_PASSWORD}
+      N8N_DB_PASSWORD: ${N8N_DB_PASSWORD}
     ports:
       - "${POSTGRES_HOST}:${POSTGRES_PORT}:${POSTGRES_PORT}"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+      - postgres-data:/var/lib/postgresql
+      - ./database/init-scripts:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -32,6 +37,9 @@ services:
       dockerfile: Dockerfile
     container_name: pm-mcp-server
     restart: unless-stopped
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
     environment:
       DB_HOST: postgres
       DB_PORT: ${POSTGRES_PORT}
@@ -64,6 +72,9 @@ services:
     image: docker.n8n.io/n8nio/n8n:2.40.0
     container_name: pm-n8n
     restart: unless-stopped
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
     ports:
       - "${N8N_HOST}:${N8N_PORT}:${N8N_PORT}"
     environment:
@@ -97,23 +108,26 @@ services:
       - n8n-net
       - backend-net
 
-  cloudflared:
-    image: cloudflare/cloudflared:2026.9.3
-    container_name: pm-cloudflared
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run
-    environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on:
-      n8n:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-    networks:
-      - n8n-net
+  # cloudflared:
+  #   image: cloudflare/cloudflared:2026.9.3
+  #   container_name: pm-cloudflared
+  #   restart: unless-stopped
+  #   sysctls:
+  #     - net.ipv6.conf.all.disable_ipv6=1
+  #     - net.ipv6.conf.default.disable_ipv6=1
+  #   command: tunnel --no-autoupdate run
+  #   environment:
+  #     - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+  #   depends_on:
+  #     n8n:
+  #       condition: service_healthy
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '0.25'
+  #         memory: 256M
+  #   networks:
+  #     - n8n-net
 
 networks:
   backend-net:
