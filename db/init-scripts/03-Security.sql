@@ -16,6 +16,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM n8n_app_r
 -- -----------------------------------------------------------------------------
 
 -- === n8n_app_role ===
+GRANT USAGE, CREATE ON SCHEMA public TO n8n_app_role;
 GRANT SELECT ON public.products TO n8n_app_role;
 
 GRANT SELECT, INSERT, UPDATE ON public.leads TO n8n_app_role;
@@ -28,6 +29,7 @@ GRANT SELECT, INSERT, UPDATE ON public.conversation_logs TO n8n_app_role;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO n8n_app_role;
 
 -- === mcp_app_role ===
+GRANT USAGE, CREATE ON SCHEMA public TO mcp_app_role;
 GRANT SELECT ON public.products TO mcp_app_role;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.leads TO mcp_app_role;
