@@ -16,7 +16,7 @@ services:
       - "${POSTGRES_HOST}:${POSTGRES_PORT}:${POSTGRES_PORT}"
     volumes:
       - postgres-data:/var/lib/postgresql
-      - ./database/init-scripts:/docker-entrypoint-initdb.d:ro
+      - ./db/init-scripts:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -128,6 +128,43 @@ services:
   #         memory: 256M
   #   networks:
   #     - n8n-net
+
+  dbmate:
+    image: amacneil/dbmate:latest
+    container_name: pm-dbmate
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    volumes:
+      - ./db/migrations:/db/migrations
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable
+      - DBMATE_MIGRATIONS_DIR=/db/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend-net
+
+  # db-backup:
+  #   image: prodrigestivill/postgres-backup-local:latest
+  #   container_name: pm-db-backup
+  #   restart: unless-stopped
+  #   environment:
+  #     - POSTGRES_HOST=postgres
+  #     - POSTGRES_PORT=${POSTGRES_PORT}
+  #     - POSTGRES_DB=${POSTGRES_DB}
+  #     - POSTGRES_USER=${POSTGRES_USER}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #     - SCHEDULE=@daily
+  #     - BACKUP_KEEP_DAYS=7
+  #   volumes:
+  #     - ./db/backups:/backups
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - backend-net
 
 networks:
   backend-net:

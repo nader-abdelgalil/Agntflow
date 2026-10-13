@@ -7,6 +7,9 @@ n8n_data/
 docs/
 
 ### Database ###
+db/migrations/*
+db/backups/*.*
+db/backups/*/*.sql.gz
 *.accdb
 *.db
 *.dbf
