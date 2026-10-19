@@ -12,6 +12,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       MCP_DB_PASSWORD: ${MCP_DB_PASSWORD}
       N8N_DB_PASSWORD: ${N8N_DB_PASSWORD}
+      DBMATE_DB_PASSWORD: ${DBMATE_DB_PASSWORD}
+      BACKUP_DB_PASSWORD: ${BACKUP_DB_PASSWORD}
     ports:
       - "${POSTGRES_HOST}:${POSTGRES_PORT}:${POSTGRES_PORT}"
     volumes:
@@ -30,45 +32,6 @@ services:
           memory: 1024M
     networks:
       - backend-net
-    security_opt:
-      - no-new-privileges:true
-
-  mcp-server:
-    build:
-      context: ./mcp-server
-      dockerfile: Dockerfile
-    container_name: pm-mcp-server
-    restart: unless-stopped
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=1
-      - net.ipv6.conf.default.disable_ipv6=1
-    environment:
-      DB_HOST: postgres
-      DB_PORT: ${POSTGRES_PORT}
-      DB_USER: ${MCP_SERVER_DB_USER}
-      DB_PASSWORD: ${MCP_DB_PASSWORD}
-      DB_NAME: ${POSTGRES_DB}
-      PORT: ${MCP_SERVER_PORT}
-      MCP_API_KEY: ${MCP_API_KEY} 
-    ports:
-      - "${MCP_SERVER_HOST}:${MCP_SERVER_PORT}:${MCP_SERVER_PORT}"
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:${MCP_SERVER_PORT}/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    depends_on:
-      postgres:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-    networks:
-      - backend-net
-      - n8n-net
     security_opt:
       - no-new-privileges:true
 
@@ -137,6 +100,45 @@ services:
   #   security_opt:
   #     - no-new-privileges:true
 
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    container_name: pm-mcp-server
+    restart: unless-stopped
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    environment:
+      DB_HOST: postgres
+      DB_PORT: ${POSTGRES_PORT}
+      DB_USER: ${MCP_SERVER_DB_USER}
+      DB_PASSWORD: ${MCP_DB_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      PORT: ${MCP_SERVER_PORT}
+      MCP_API_KEY: ${MCP_API_KEY} 
+    ports:
+      - "${MCP_SERVER_HOST}:${MCP_SERVER_PORT}:${MCP_SERVER_PORT}"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:${MCP_SERVER_PORT}/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - backend-net
+      - n8n-net
+    security_opt:
+      - no-new-privileges:true
+
   dbmate:
     image: amacneil/dbmate:latest
     container_name: pm-dbmate
@@ -146,7 +148,7 @@ services:
     volumes:
       - ./db/migrations:/db/migrations
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable
+      - DATABASE_URL=postgres://${DBMATE_DB_USER}:${DBMATE_DB_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable
       - DBMATE_MIGRATIONS_DIR=/db/migrations
     depends_on:
       postgres:
@@ -156,27 +158,27 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  # db-backup:
-  #   image: prodrigestivill/postgres-backup-local:latest
-  #   container_name: pm-db-backup
-  #   restart: unless-stopped
-  #   environment:
-  #     - POSTGRES_HOST=postgres
-  #     - POSTGRES_PORT=${POSTGRES_PORT}
-  #     - POSTGRES_DB=${POSTGRES_DB}
-  #     - POSTGRES_USER=${POSTGRES_USER}
-  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-  #     - SCHEDULE=@daily
-  #     - BACKUP_KEEP_DAYS=7
-  #   volumes:
-  #     - ./db/backups:/backups
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   networks:
-  #     - backend-net
-  #   security_opt:
-  #     - no-new-privileges:true
+  db-backup:
+    image: prodrigestivill/postgres-backup-local:latest
+    container_name: pm-db-backup
+    restart: unless-stopped
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${BACKUP_DB_USER}
+      - POSTGRES_PASSWORD=${BACKUP_DB_PASSWORD}
+      - SCHEDULE=@daily
+      - BACKUP_KEEP_DAYS=7
+    volumes:
+      - ./db/backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend-net
+    security_opt:
+      - no-new-privileges:true
 
 networks:
   backend-net:
