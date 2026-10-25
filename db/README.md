@@ -92,6 +92,8 @@ Stores core identity and profile metadata for leads.
 
     - `full_name` (`VARCHAR(255)`)
 
+    - `user_name` (`VARCHAR(255)`)
+
     - `secondary_phone` (`VARCHAR(20)`)
 
     - `email` (`VARCHAR(255)`)
@@ -213,6 +215,26 @@ Chronological interaction logs between leads, automated systems, and human agent
 
     - `updated_at` (`TIMESTAMPTZ`, `DEFAULT NOW()`)
 
+### 7. `public.messages`
+
+Message records associated with leads.
+
+- **Columns**:
+
+    - `message_id` (`TEXT`, `PRIMARY KEY`)
+
+    - `lead_id` (`BIGINT`, `NOT NULL`, `REFERENCES leads(id) ON DELETE CASCADE`)
+    
+    - `message_type` (`TEXT`, `NOT NULL`)
+    
+    - `content` (`TEXT`, `NOT NULL`)
+    
+    - `media_id` (`TEXT`)
+    
+    - `created_at` (`TIMESTAMP`, `DEFAULT NOW()`)
+    
+    - `updated_at` (`TIMESTAMP`, `DEFAULT NOW()`)
+    
 ---
 
 ## Performance Optimization & Indexing Strategy

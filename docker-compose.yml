@@ -55,6 +55,13 @@ services:
       - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
       - DB_POSTGRESDB_USER=${N8N_DB_USER}
       - DB_POSTGRESDB_PASSWORD=${N8N_DB_PASSWORD}
+      - WHATSAPP_APP_SECRET=${WHATSAPP_APP_SECRET}
+      - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN}
+      - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
+      - Groq_API_KEY=${Groq_API_KEY}
+      - NODE_FUNCTION_ALLOW_BUILTIN=crypto
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      
     volumes:
       - n8n-data:/home/node/.n8n
     healthcheck:
@@ -77,28 +84,31 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  # cloudflared:
-  #   image: cloudflare/cloudflared:2026.9.3
-  #   container_name: pm-cloudflared
-  #   restart: unless-stopped
-  #   sysctls:
-  #     - net.ipv6.conf.all.disable_ipv6=1
-  #     - net.ipv6.conf.default.disable_ipv6=1
-  #   command: tunnel --no-autoupdate run
-  #   environment:
-  #     - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
-  #   depends_on:
-  #     n8n:
-  #       condition: service_healthy
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '0.25'
-  #         memory: 256M
-  #   networks:
-  #     - n8n-net
-  #   security_opt:
-  #     - no-new-privileges:true
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3
+    container_name: pm-cloudflared
+    restart: unless-stopped
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    command: tunnel --url http://pm-n8n:5678
+      # - tunnel 
+      # - --no-autoupdate
+      # - run
+    # environment:
+    #   - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      n8n:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - n8n-net
+    security_opt:
+      - no-new-privileges:true
 
   mcp-server:
     build:
@@ -158,27 +168,27 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  db-backup:
-    image: prodrigestivill/postgres-backup-local:latest
-    container_name: pm-db-backup
-    restart: unless-stopped
-    environment:
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${BACKUP_DB_USER}
-      - POSTGRES_PASSWORD=${BACKUP_DB_PASSWORD}
-      - SCHEDULE=@daily
-      - BACKUP_KEEP_DAYS=7
-    volumes:
-      - ./db/backups:/backups
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - backend-net
-    security_opt:
-      - no-new-privileges:true
+  # db-backup:
+  #   image: prodrigestivill/postgres-backup-local:latest
+  #   container_name: pm-db-backup
+  #   restart: unless-stopped
+  #   environment:
+  #     - POSTGRES_HOST=postgres
+  #     - POSTGRES_PORT=${POSTGRES_PORT}
+  #     - POSTGRES_DB=${POSTGRES_DB}
+  #     - POSTGRES_USER=${BACKUP_DB_USER}
+  #     - POSTGRES_PASSWORD=${BACKUP_DB_PASSWORD}
+  #     - SCHEDULE=@daily
+  #     - BACKUP_KEEP_DAYS=7
+  #   volumes:
+  #     - ./db/backups:/backups
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - backend-net
+  #   security_opt:
+  #     - no-new-privileges:true
 
 networks:
   backend-net:
