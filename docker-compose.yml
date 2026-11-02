@@ -61,7 +61,10 @@ services:
       - Groq_API_KEY=${Groq_API_KEY}
       - NODE_FUNCTION_ALLOW_BUILTIN=crypto
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
-      
+      - WHATSAPP_BUSINESS_ACCOUNT_ID=${WHATSAPP_BUSINESS_ACCOUNT_ID}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+
     volumes:
       - n8n-data:/home/node/.n8n
     healthcheck:

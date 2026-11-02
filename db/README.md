@@ -234,7 +234,50 @@ Message records associated with leads.
     - `created_at` (`TIMESTAMP`, `DEFAULT NOW()`)
     
     - `updated_at` (`TIMESTAMP`, `DEFAULT NOW()`)
-    
+
+- **Partitioned Messages Table**:
+
+    The `messages` table is engineered using **Range Partitioning** by yearly intervals (`created_at`) to guarantee long-term query performance and seamless data archiving.
+
+    ```SQL
+    -- Example for year 2027
+    CREATE TABLE IF NOT EXISTS public.messages_y2027 PARTITION OF public.messages
+    FOR VALUES FROM ('2027-01-01 00:00:00') TO ('2028-01-01 00:00:00');
+    ```
+### 8. `public.system_logs`
+
+Dedicated system and technical log repository for monitoring workflow executions, API failures, and runtime exceptions.
+
+- **Columns**:
+
+    - `log_id` (`BIGINT`, `GENERATED ALWAYS AS IDENTITY`, `PRIMARY KEY`)
+
+    - `workflow_id` (`VARCHAR(255)`): **n8n Workflow Execution Context**.
+
+    - `execution_id` (`VARCHAR(255)`): **n8n Runtime Instance Identifier**.
+
+    - `node_name` (`VARCHAR(255)`, `NOT NULL`): **Failing/Originating Node Identifier**.
+
+    - `error_code` (`VARCHAR(100)`): **Technical Error Code** (e.g., `ERR_BAD_REQUEST`, `401`).
+
+    - `error_status` (`VARCHAR(50)`): **HTTP Status / Severity Standard**.
+
+    - `error_message` (`TEXT`, `NOT NULL`): **Exception Narrative / Stack Description**.
+
+    - `error_description ` (`TEXT`)
+
+    - `error_details` (`JSONB`, `DEFAULT '{}'::jsonb`): **Raw Payload Exception State**.
+
+    - `lead_id` (`BIGINT`, `REFERENCES public.leads(id) ON DELETE SET NULL`)
+
+    - `message_id` (`TEXT`)
+
+    - `media_id` (`TEXT`)
+
+    - `created_at` (`TIMESTAMPTZ`, `DEFAULT NOW()`)
+
+    - `updated_at` (`TIMESTAMPTZ`, `DEFAULT NOW()`)
+
 ---
 
 ## Performance Optimization & Indexing Strategy
@@ -254,6 +297,18 @@ To maintain sub-millisecond query performance under operational load, indexes ar
 6. `idx_orders_status`: B-Tree index on `public.orders(status)` for order processing workflows.
 
 7. `idx_conversation_logs_lead`: Composite B-Tree index on `public.conversation_logs(lead_id, created_at DESC)` for high-speed chronological chat history reconstruction.
+
+8. `idx_media_id`: B-Tree index on `public.messages(media_id)` for media id lookups.
+
+9. `idx_messages_lead_created_at` Composite B-Tree index on `public.messages (lead_id, created_at DESC)` for high-speed chronological chat history reconstruction.
+
+10. `idx_system_logs_node_name`: B-Tree index on `public.system_logs(node_name)` for system debugging by node.
+
+11. `idx_system_logs_lead_id`: B-Tree index on `public.system_logs(lead_id)` for inspecting error sequences linked to specific leads.
+
+12. `idx_system_logs_created_at`: B-Tree index on `public.system_logs(created_at DESC)` for chronological error monitoring and operational dashboards.
+
+13. `idx_system_logs_error_code`: B-Tree index on `public.system_logs(error_code)` for categorical error frequency aggregation.
 
 ---
 
@@ -289,6 +344,10 @@ The function is bound via `BEFORE UPDATE ON FOR EACH ROW` triggers across:
 - `order_items` (`update_order_items_updated_at`)
 
 - `conversation_logs` (`update_conversation_logs_updated_at`)
+
+- `messages` (`update_messages_updated_at`)
+
+- `system_logs` (`update_system_logs_updated_at`)
 
 ---
 
@@ -353,7 +412,7 @@ To ensure future-proof schema evolution, object ownership is centered around `db
 
 - **Read-Only (`SELECT`)**: `public.products`
 
-- **Operational Write (`SELECT`, `INSERT`, `UPDATE`)***: `public.leads`, `public.orders`, `public.order_items`, `public.lead_interests`, `public.conversation_logs`
+- **Operational Write (`SELECT`, `INSERT`, `UPDATE`)***: `public.leads`, `public.orders`, `public.order_items`, `public.lead_interests`, `public.conversation_logs`, `public.messages`
 
 - **Forbidden**: `DELETE` access on all tables; DDL operations.
 
@@ -362,7 +421,7 @@ To ensure future-proof schema evolution, object ownership is centered around `db
 
 - **Read-Only (`SELECT`)**: `public.products`
 
-- **Full Operational Access (`SELECT`, `INSERT`, `UPDATE`, `DELETE`)**: `public.leads`, `public.orders`, `public.order_items`, `public.lead_interests`, `public.conversation_logs`
+- **Full Operational Access (`SELECT`, `INSERT`, `UPDATE`, `DELETE`)**: `public.leads`, `public.orders`, `public.order_items`, `public.lead_interests`, `public.conversation_logs`, `public.messages`
 
 - **Forbidden**: DDL operations.
 
@@ -377,6 +436,8 @@ ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lead_interests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversation_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
 ```
 
 
@@ -399,6 +460,10 @@ ALTER TABLE public.conversation_logs ENABLE ROW LEVEL SECURITY;
 
 - `n8n_conversation_logs_policy` ON `public.conversation_logs`
 
+- `n8n_messages_policy` ON `public.messages`
+
+- `n8n_system_logs_policy` ON `public.system_logs`
+
 
 ### Policies for `mcp_app_role`
 
@@ -412,6 +477,9 @@ ALTER TABLE public.conversation_logs ENABLE ROW LEVEL SECURITY;
 
 - `mcp_conversation_logs_policy` ON `public.conversation_logs`
 
+- `mcp_messages_policy` ON `public.messages`
+
+- `mcp_system_logs_policy` ON `public.system_logs`
 
 ### Backup Isolation (`backup_app_role`)
 
