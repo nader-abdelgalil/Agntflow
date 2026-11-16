@@ -36,7 +36,7 @@ services:
       - no-new-privileges:true
 
   n8n:
-    image: docker.n8n.io/n8nio/n8n:2.40.0
+    image: docker.n8n.io/n8nio/n8n:latest
     container_name: pm-n8n
     restart: unless-stopped
     sysctls:
@@ -64,6 +64,10 @@ services:
       - WHATSAPP_BUSINESS_ACCOUNT_ID=${WHATSAPP_BUSINESS_ACCOUNT_ID}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - MCP_URL=${MCP_URL}
+      - MCP_API_KEY=${MCP_API_KEY}
 
     volumes:
       - n8n-data:/home/node/.n8n
@@ -122,14 +126,17 @@ services:
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=1
       - net.ipv6.conf.default.disable_ipv6=1
+    env_file:
+      - ./.env   # إذا كان ملف docker-compose.yml داخل مجلد Workflow
     environment:
       DB_HOST: postgres
       DB_PORT: ${POSTGRES_PORT}
       DB_USER: ${MCP_SERVER_DB_USER}
       DB_PASSWORD: ${MCP_DB_PASSWORD}
       DB_NAME: ${POSTGRES_DB}
+      URL: ${MCP_URL}
       PORT: ${MCP_SERVER_PORT}
-      MCP_API_KEY: ${MCP_API_KEY} 
+      MCP_API_KEY: ${MCP_API_KEY}
     ports:
       - "${MCP_SERVER_HOST}:${MCP_SERVER_PORT}:${MCP_SERVER_PORT}"
     healthcheck:

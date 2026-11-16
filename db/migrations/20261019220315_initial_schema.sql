@@ -151,7 +151,7 @@ GRANT SELECT, INSERT, UPDATE ON public.lead_interests TO n8n_app_role;
 GRANT SELECT, INSERT, UPDATE ON public.conversation_logs TO n8n_app_role;
 
 -- === mcp_app_role ===
-GRANT SELECT ON public.products TO mcp_app_role;
+GRANT SELECT, UPDATE ON public.products TO mcp_app_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.leads TO mcp_app_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.orders TO mcp_app_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.conversation_logs TO mcp_app_role;
