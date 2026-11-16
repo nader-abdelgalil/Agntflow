@@ -1,0 +1,46 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  validate-project:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Scan for leaked secrets (Gitleaks CLI)
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/path" zricethezav/gitleaks:v8.24.2 detect --source="/path" --verbose --redact
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: mcp-server/package-lock.json
+
+      - name: Install dependencies, Audit & Build MCP Server
+        working-directory: ./mcp-server
+        run: |
+          npm ci
+          npm audit --omit=dev --audit-level=high
+          npm run build
+
+      - name: Validate n8n Workflow JSON & Sanitization
+        run: |
+          node -e "
+            const fs = require('fs');
+            const wf = JSON.parse(fs.readFileSync('n8n/Agntflow-workflow.json', 'utf8'));
+            if (wf.meta && wf.meta.instanceId) {
+              throw new Error('Sanitization Error: instanceId must be empty.');
+            }
+            console.log('n8n workflow JSON is valid and sanitized.');
+          "
