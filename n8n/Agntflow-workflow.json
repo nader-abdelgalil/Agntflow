@@ -1,0 +1,1489 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp/inbound-v1",
+        "options": {
+          "rawBody": true,
+          "responseCode": {
+            "values": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -640,
+        -208
+      ],
+      "id": "8a83f65c-9563-4ee5-aaa9-0c8e1a998fad",
+      "name": "Webhook - WhatsApp Inbound",
+      "webhookId": "58cb303d-c922-4a60-9424-416cbb556c8c"
+    },
+    {
+      "parameters": {
+        "path": "whatsapp/inbound-v1",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1104,
+        -656
+      ],
+      "id": "95060be1-f94b-4f49-81c7-e8ac94c1edfe",
+      "name": "Webhook - Meta Verification",
+      "webhookId": "58cb303d-c922-4a60-9424-416cbb556c8c"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst item = $input.first();\nconst headers = item.json.headers;\nconst signatureHeader = headers['x-hub-signature-256'];\n\n\nif (!signatureHeader) {\n  throw new Error('Unauthorized: Missing X-Hub-Signature-256 header.');\n}\n\nconst signature = signatureHeader.split('=')[1];\nconst APP_SECRET = $env.WHATSAPP_APP_SECRET;\n\n// Extracting the available key from the binary\nconst binaryKeys = Object.keys(item.binary || {});\nif (binaryKeys.length === 0) {\n  throw new Error('Error: No binary raw body found. Make sure \"Raw Body\" option is enabled in Webhook node.');\n}\nconst rawBodyBase64 = item.binary[binaryKeys[0]].data;\n\n// Convert Base64 to a raw Buffer\nconst rawBodyBuffer = Buffer.from(rawBodyBase64, 'base64');\n\n// Calculating the signature using the raw buffer\nconst expectedSignature = crypto\n  .createHmac('sha256', APP_SECRET)\n  .update(rawBodyBuffer)\n  .digest('hex');\n\nconst signatureBuffer = Buffer.from(signature, 'hex');\nconst expectedBuffer = Buffer.from(expectedSignature, 'hex');\n\n// Security comparison to prevent timing attacks\nif (\n  signatureBuffer.length !== expectedBuffer.length ||\n  !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)\n) {\n  throw new Error('Forbidden: Invalid Webhook Signature.');\n}\n\n// Parse the raw body and pass clean WhatsApp data\nconst parsedBody = JSON.parse(rawBodyBuffer.toString('utf8'));\n\nreturn {\n  json: parsedBody\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        -208
+      ],
+      "id": "3e3e2303-d4cb-4cf1-910d-d6e68348169a",
+      "name": "JS Code - Verify Signature",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -640,
+        -672
+      ],
+      "id": "f3097f93-6f65-4b7f-a14c-bf11494c7ca7",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a008eeee-0718-4b6e-89af-cb4393213ba2",
+              "leftValue": "={{ $json.query['hub.verify_token'] }}",
+              "rightValue": "={{ $env.WHATSAPP_VERIFY_TOKEN }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -880,
+        -656
+      ],
+      "id": "f653b2e8-6dc2-420a-bb55-5aecf7c9325e",
+      "name": "If - Verify Token"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst message = item.entry?.[0]?.changes?.[0]?.value?.messages?.[0];\n\nif (message) {\n  const isText = message.type === 'text';\n  const isVoice = message.type === 'audio' && message.audio?.voice === true;\n\n  if (isText || isVoice) {\n    return [{ \n      json: { \n        messageType: message.type, \n        messageData: message, \n        raw: item \n      } \n    }];\n  }\n}\n\nreturn [];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        -208
+      ],
+      "id": "a27bb311-0b29-47c4-b80d-2d102557fc5c",
+      "name": "JS Code - Is Message Event"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('JS Code - Extract WhatsApp Payload').first().json.media_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.WHATSAPP_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -640,
+        112
+      ],
+      "id": "d913e22a-57ca-4104-9b49-7a606628e998",
+      "name": "HTTP Request - Download Media File",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/audio/transcriptions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.Groq_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "model",
+              "value": "whisper-large-v3"
+            },
+            {
+              "name": "temperature",
+              "value": "0.0"
+            },
+            {
+              "name": "language",
+              "value": "ar"
+            },
+            {
+              "name": "prompt",
+              "value": "تسجيل صوتي لعميل يتحدث باللهجة المصرية أو العربية الفصحى بخصوص طلبات أو استفسارات."
+            },
+            {
+              "name": "response_format",
+              "value": "verbose_json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -352,
+        96
+      ],
+      "id": "8e68d43b-35c5-44eb-986c-6d0be7269aa1",
+      "name": "HTTP Request - Groq Whisper STT",
+      "retryOnFail": true,
+      "alwaysOutputData": false,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.leads (phone, full_name, user_name, created_at)\nVALUES ($1, $2, $3, $4)\nON CONFLICT (phone) \nDO UPDATE SET \n    full_name = EXCLUDED.full_name,\n    user_name = EXCLUDED.user_name,\n    updated_at = NOW()\nRETURNING id AS lead_id, phone, lead_status, full_name;",
+        "options": {
+          "queryReplacement": "={{ $json.phone }}, {{ $json.name }}, {{ $json.user_name }}, {{ $json.timestamp }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        176,
+        -208
+      ],
+      "id": "8ac8a241-9c54-44e3-bed2-d7e6af948a49",
+      "name": "PostgreSQL - UPSERT Lead",
+      "credentials": {
+        "postgres": {
+          "id": "I2wKRgGVQTdS8Nyj",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst segments = response.segments || [];\nconst text = (response.text || \"\").trim();\nconst payload = $('JS Code - Extract WhatsApp Payload').first().json;\n\nconst db = $('PostgreSQL - UPSERT Lead').first().json;\n\n// 1. التحقق من طول النص\nif (text.length === 0) {\n  return [{ json: { isClean: false, isNoisy: true, text: \"\", reason: \"Empty text\" } }];\n}\n\n// 2. فحص شرائح الصوت لمؤشرات الضوضاء والهلوسة والصمت\nlet isNoisyOrSilent = false;\n\nif (segments.length > 0) {\n  isNoisyOrSilent = segments.some(segment => {\n    const highNoSpeech = segment.no_speech_prob > 0.6;\n    const highCompression = segment.compression_ratio > 2.4; // تشير لتكرار الكلمات أو الهلوسة\n    const lowLogProb = segment.avg_logprob < -1.0; // تشير لثقة ضعيفة جداً بالنص\n\n    return highNoSpeech || highCompression || lowLogProb;\n  });\n}\n\nconst isClean = !isNoisyOrSilent;\nconst isNoisy = isNoisyOrSilent;\n\nreturn [{\n  json: {\n    ...payload,\n    ...db,\n    isClean,\n    isNoisy,\n    text\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        80
+      ],
+      "id": "921f60a4-88cc-4206-8656-344a271bdebe",
+      "name": "JS Code - Manage Audio Transcription"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1477af67-4785-487c-bbc8-3113f8749d56",
+              "leftValue": "={{$json.isClean}}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        384,
+        80
+      ],
+      "id": "af73b730-502d-4c70-a724-22186f9e9638",
+      "name": "If - Is Audio Clean"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.messages (message_id, lead_id, message_type, created_at)\nVALUES ($1, $2, $3, $4)\nON CONFLICT (message_id, created_at) \nDO NOTHING\nRETURNING message_id;",
+        "options": {
+          "queryReplacement": "={{ $('JS Code - Extract WhatsApp Payload').first().json.message_id }}, {{ $json.lead_id }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.message_type }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.timestamp }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        384,
+        -208
+      ],
+      "id": "117df035-d087-4fec-9c11-ccc0c660d8fb",
+      "name": "PostgreSQL - Idempotency Check",
+      "credentials": {
+        "postgres": {
+          "id": "I2wKRgGVQTdS8Nyj",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6897b281-2416-482f-bf9c-50b8ca2e60fa",
+              "leftValue": "={{ $json.message_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        592,
+        -208
+      ],
+      "id": "7b98306f-cdd0-45e9-9b2c-bc38c03d3b85",
+      "name": "If - New Event"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst message = item.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];\n\nif (message) {\n  const isText = message.type === 'text';\n  const isVoice = message.type === 'audio' && message.audio?.voice === true;\n\n  if (isText || isVoice) {\n    return [{ \n      json: { \n        messageType: message.type, \n        messageData: message, \n        raw: item \n      } \n    }];\n  }\n}\n\nreturn [];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        -544
+      ],
+      "id": "d75aec52-b719-41d4-b697-4d556e4a240d",
+      "name": "JS Code - Is Message Event - Test"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst value = item.raw.body?.entry[0].changes[0].value;\nconst message = value.messages[0];\nconst contact = value.contacts?.[0];\n\nreturn [{\n  json: {\n    message_id: message.id,\n    phone: message.from,\n    name: contact?.profile?.name || null,\n    user_name: contact?.profile?.username || null,\n    message_type: message.type,\n    content: message.type === 'text' ? message.text.body : null,\n    media_id: message.audio?.id || null,\n    media_url: message.audio?.url || null,\n    timestamp: new Date(parseInt(message.timestamp) * 1000).toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -544
+      ],
+      "id": "1f49eff5-7d6f-4206-8169-0f61e4cd7a6c",
+      "name": "JS Code - Extract WhatsApp Payload - Test"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst value = item.raw.entry[0].changes[0].value;\nconst message = value.messages[0];\nconst contact = value.contacts?.[0];\n\nreturn [{\n  json: {\n    message_id: message.id,\n    phone: message.from,\n    name: contact?.profile?.name || null,\n    user_name: contact?.profile?.username || null,\n    message_type: message.type,\n    content: message.type === 'text' ? message.text.body : null,\n    media_id: message.audio?.id || null,\n    media_url: message.audio?.url || null,\n    timestamp: new Date(parseInt(message.timestamp) * 1000).toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        -208
+      ],
+      "id": "1621e3e7-c202-4e95-af81-b154ae5d082c",
+      "name": "JS Code - Extract WhatsApp Payload"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.messages (message_id, lead_id, message_type, created_at)\nVALUES ($1, $2, $3, $4::timestamp)\nON CONFLICT (message_id, created_at) \nDO NOTHING\nRETURNING message_id;",
+        "options": {
+          "queryReplacement": "={{ $('JS Code - Extract WhatsApp Payload - Test').first().json.message_id }}, {{ $json.lead_id }}, {{ $('JS Code - Extract WhatsApp Payload - Test').first().json.message_type }}, {{ $('JS Code - Extract WhatsApp Payload - Test').first().json.timestamp }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        672,
+        -544
+      ],
+      "id": "6817e8bf-bbef-43b6-97aa-88b07a464bf2",
+      "name": "PostgreSQL - Idempotency Check - Test",
+      "credentials": {
+        "postgres": {
+          "id": "I2wKRgGVQTdS8Nyj",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('JS Code - Extract WhatsApp Payload').first().json.message_type }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "98472a55-69cd-4618-a2d1-379c71a06802"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Text"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "6308da10-7c20-4ea5-9c30-6cdbf06061c2",
+                    "leftValue": "={{ $('JS Code - Extract WhatsApp Payload').first().json.message_type }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Audio"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        -224
+      ],
+      "id": "70c7b525-459b-4e9b-b609-bac9589cd862",
+      "name": "Switch - Text OR Audio"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1104,
+        -448
+      ],
+      "id": "70095f34-a63b-4428-bca0-d815d649b3ba",
+      "name": "Error Trigger",
+      "retryOnFail": false,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE public.messages \nSET message_type = 'audio_error',\n  content = '[تعذر تفريغ الصوت - تم تحويل الطلب للمبيعات]',\n  media_id = $1\nWHERE message_id = $2 AND created_at = $3;",
+        "options": {
+          "queryReplacement": "={{ $('JS Code - Extract WhatsApp Payload').first().json.media_id }},{{ $('JS Code - Extract WhatsApp Payload').first().json.message_id }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.timestamp }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -640,
+        560
+      ],
+      "id": "8d90f5f5-c169-4dd7-aab2-8381b2e22569",
+      "name": "PostgreSQL - UPDATE messages audio_error",
+      "credentials": {
+        "postgres": {
+          "id": "I2wKRgGVQTdS8Nyj",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE public.leads \nSET lead_status = 'HUMAN_HANDOFF'\nWHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('PostgreSQL - UPSERT Lead').first().json.lead_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -416,
+        560
+      ],
+      "id": "8ded5b1d-6150-4d69-8087-bdaccd64923e",
+      "name": "PostgreSQL - UPDATE leads human_handoff",
+      "credentials": {
+        "postgres": {
+          "id": "I2wKRgGVQTdS8Nyj",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_NUMBER_ID }}",
+        "recipientPhoneNumber": "=  {{ $('JS Code - Extract WhatsApp Payload').first().json.phone }}",
+        "textBody": "تم إستلام التسجيل الصوتي، سيقوم أحد ممثلي الخدمة بمراجعة الطلب والرد عليكم في أقرب وقت ",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        -272,
+        336
+      ],
+      "id": "8d65ebac-a270-41b6-aef4-d256e5ae1458",
+      "name": "WhatsApp - Static Response",
+      "webhookId": "6ebdfafc-75b3-45f2-9875-746f01144735",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "KewR5mMgcVKkPhxW",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=*Error: Whisper API Error*\n\n• *Lead ID:* `{{ $('PostgreSQL - UPSERT Lead').first().json.lead_id }}`\n\n• *Phone Number:* `{{ $('JS Code - Extract WhatsApp Payload').first().json.phone }}`\n\n• *Message Id:* `{{ $('JS Code - Extract WhatsApp Payload').first().json.message_id || 'N/A' }}`\n\n• *Media URL:* `{{ $('JS Code - Extract WhatsApp Payload').first().json.media_url || 'N/A' }}`\n\n*Error Outputs:*\n\n• *Node:* HTTP Request - Groq Whisper STT\n\n• *Error Code:* `{{ $json.error.code || 'N/A' }}`\n\n• *Error Status:* `{{ $json.error.status || 'N/A' }}`\n\n• *Error Message:* `{{ $json.details.message || 'Unknown Error' }}`\n\n• *Error Description:* `{{ $json.details.description || 'Unknown Error' }}`\n\n• *Action Taken:* The automated bot has been stopped, and the status has been automatically updated to **Human Handoff**. Please follow up directly with the customer.\n",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        -800
+      ],
+      "id": "02058dd1-5f9d-43c4-a290-bb0a68ed8617",
+      "name": "Telegram - Whisper Error Notification",
+      "webhookId": "711b22f9-6caf-47ba-9893-4c9146c80329",
+      "credentials": {
+        "telegramApi": {
+          "id": "xeuD11yuKLwVB8vu",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=*Error: {{ JSON.stringify($json).includes('groq') ? 'Whisper API' : 'Download Media File' }} Error*\n\n• *Workflow Id:* `{{ $json.workflow_id }}`\n\n• *Execution Id:* `{{ $json.execution_id }}` \n\n• *Timestamp:* `{{ $('JS Code - Extract WhatsApp Payload').first().json.timestamp }}`\n\n• *Lead Id:* `{{ $('PostgreSQL - UPSERT Lead').first().json.lead_id }}`\n\n• *Phone Number:* `{{ $('JS Code - Extract WhatsApp Payload').first().json.phone }}`\n\n• *Message Id:* `{{ $('JS Code - Extract WhatsApp Payload').first().json.message_id || 'N/A' }}`\n\n• *Media Id:* `{{ $('JS Code - Extract WhatsApp Payload').first().json.media_id || 'N/A' }}`\n\n• *Media URL:* `{{ $('JS Code - Extract WhatsApp Payload').first().json.media_url || 'N/A' }}`\n\n*Error Outputs:*\n\n• *Node:* `{{ JSON.stringify($json).includes('groq') ? 'HTTP Request - Groq Whisper STT' : 'HTTP Request - Download Media File' }}`\n\n• *Error Code:* `{{ $json.error_code || 'N/A' }}`\n\n• *Error Status:* `{{ $json.error_status || 'N/A' }}`\n\n• *Error Message:* `{{ $json.error_message || 'Unknown Error' }}`\n\n• *Error Description:* `{{ $json.error_description || 'Unknown Error' }}`\n\n• *Action Taken:* The automated bot has been stopped, and the status has been automatically updated to **Human Handoff**. Please follow up directly with the customer.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -464,
+        336
+      ],
+      "id": "0b75890a-b5aa-484f-a279-7d732c45787e",
+      "name": "Telegram - Error Notification",
+      "webhookId": "711b22f9-6caf-47ba-9893-4c9146c80329",
+      "credentials": {
+        "telegramApi": {
+          "id": "xeuD11yuKLwVB8vu",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_NUMBER_ID }}",
+        "recipientPhoneNumber": "=  {{ $('JS Code - Extract WhatsApp Payload').first().json.phone }}",
+        "textBody": "عذراً يا فندم، يبدو أن التسجيل الصوتي غير واضح. برجاء إعادة الإرسال أو كتابة استفسارك في رسالة نصية لنتمكن من مساعدتك فوراً.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        400,
+        352
+      ],
+      "id": "5bac0c9c-1828-4895-8537-287caeab7f1a",
+      "name": "WhatsApp - Unclear Audio",
+      "webhookId": "174e52d0-91e4-4bca-b4ef-fdb709fe6f3b",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "KewR5mMgcVKkPhxW",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "15dde479-adbb-4c05-997e-cd578088a29e",
+              "name": "edit_content",
+              "value": "[رسالة صوتية غير واضحة]",
+              "type": "string"
+            },
+            {
+              "id": "16791ed4-b95f-4c3f-a8dc-189d52660e3a",
+              "name": "type_message",
+              "value": "audio_unclear",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        592,
+        352
+      ],
+      "id": "09348e6c-5b90-49c2-9fb3-0daaa38fd1ed",
+      "name": "Edit Content & Type Fields"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.messages (message_id, lead_id, message_type, content, media_id, created_at)\nVALUES ($1, $2, $3, $4, $5, $6)\nON CONFLICT (message_id, created_at) \nDO UPDATE SET \n    content = EXCLUDED.content,\n    message_type = EXCLUDED.message_type,\n    media_id = EXCLUDED.media_id;",
+        "options": {
+          "queryReplacement": "={{ $('JS Code - Extract WhatsApp Payload').first().json.message_id }}, {{ $('PostgreSQL - UPSERT Lead').first().json.lead_id }}, {{ $('Edit Content & Type Fields').first().json.type_message }}, {{ $('Edit Content & Type Fields').first().json.edit_content }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.media_id }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.timestamp }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        800,
+        352
+      ],
+      "id": "037b4dfc-0ad0-42ef-8c91-fa8d990644cb",
+      "name": "PostgreSQL - UPSERT messages unclear_audio",
+      "credentials": {
+        "postgres": {
+          "id": "I2wKRgGVQTdS8Nyj",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.system_logs (\n    workflow_id,\n    execution_id,\n    node_name, \n    error_code, \n    error_status, \n    error_message,\n    error_description, \n    lead_id, \n    message_id, \n    media_id,\n    error_details\n)\nVALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)\n  RETURNING\n    workflow_id,\n    execution_id,\n    node_name, \n    error_code, \n    error_status, \n    error_message,\n    error_description, \n    lead_id, \n    message_id, \n    media_id;",
+        "options": {
+          "queryReplacement": "={{ $workflow.id }}, {{ $execution.id }}, {{ JSON.stringify($json).includes('groq') ? 'HTTP Request - Groq Whisper STT' : 'HTTP Request - Download Media File' }}, {{ $json.error.code }}, {{ $json.error.status }}, {{ $json.details.message }}, {{ $json.details.description }}, {{ $('PostgreSQL - UPSERT Lead').first().json.lead_id }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.message_id }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.media_id }}, {{ JSON.stringify($json) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -640,
+        336
+      ],
+      "id": "8fc13c35-ab36-4003-b136-59a9e69ad86a",
+      "name": "Postgres - INSERT system_logs",
+      "credentials": {
+        "postgres": {
+          "id": "I2wKRgGVQTdS8Nyj",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "3d39b9de-8e6a-4154-83ab-cc573bba5fc0",
+              "leftValue": "={{ $('PostgreSQL - UPSERT Lead').first().json.lead_status }}",
+              "rightValue": "HUMAN_HANDOFF",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1552,
+        -80
+      ],
+      "id": "50c3ec8a-b338-43f8-8c12-c455868332cd",
+      "name": "If - HUMAN_HANDOFF"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n    const json = item.json;\n    const rawMessage = $('PostgreSQL - UPSERT Text Messages').first().json.content || $('PostgreSQL - UPSERT Audio Messages').first().json.content || '';\n    const cleanMessage = rawMessage.trim().toLowerCase();\n    const phone = $('JS Code - Extract WhatsApp Payload').first().json.phone || json.from || '';\n    const leadId = $('PostgreSQL - UPSERT Lead').first().json.lead_id || json.id || null;\n\n    let route = 'AGENT';\n    let staticResponse = null;\n    let intent = 'GENERAL_QUERY';\n\n    // 1. فحص رسائل الاحتيال والمسابقات والسبام (Scam / Prize Spam)\n    const scamKeywords = ['كسبت', 'اربح', 'مسابقة', 'جائزة', 'مبروك فزت', 'سحب على', 'ربح اليوم', 'مبروك كسبت', 'ignore previous instructions', 'ignore all instructions', 'system prompt', 'you are now', 'تجاهل التعليمات', 'انسى التعليمات'];\n    if (scamKeywords.some(kw => cleanMessage.includes(kw))) {\n        route = 'STATIC';\n        intent = 'ABUSE';\n        staticResponse = \"عذراً، هذا الحساب مخصص لخدمات الدعم والاستفسارات الرسمية فقط.\";\n    }\n\n    // 3. فحص التحيات البسيطة (Greetings)\n    else if (['مرحبا', 'مرحباً', 'هلا', 'مساء الخير', 'صباح الخير', 'اهلا', 'السلام عليكم', 'سلام عليكم', 'hi', 'hello', 'hey'].includes(cleanMessage)) {\n        route = 'STATIC';\n        intent = 'GREETING';\n        staticResponse = \"أهلاً بك! 👋 يسعدنا تواصلك معنا. كيف يمكنني مساعدتك اليوم؟\";\n    }\n\n    // 4. فحص طلب التحويل البشري (Human Handoff)\n    else if (['عملاء', 'موظف', 'بشري', 'انسان', 'تحدث مع', 'support', 'agent', 'human'].some(kw => cleanMessage.includes(kw))) {\n        route = 'HANDOFF';\n        intent = 'HUMAN_HANDOFF';\n        staticResponse = \"تم استلام طلبك بنجاح. سيقوم أحد ممثلي خدمة العملاء بالتواصل معك في أقرب وقت.\";\n    }\n\n    // 5. فحص الرسائل الطويلة جداً\n    else if (cleanMessage.length > 1000) {\n        route = 'STATIC';\n        intent = 'SPAM';\n        staticResponse = \"الرسالة طويلة جداً، يرجى إرسال استفسارك بشكل مختصر لنتمكن من مساعدتك.\";\n    }\n\n    return {\n        json: {\n            phone_number: phone,\n            lead_id: leadId,\n            original_message: rawMessage,\n            route: route,\n            intent: intent,\n            static_response: staticResponse,\n            processed_at: new Date().toISOString()\n        }\n    };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        48
+      ],
+      "id": "d1e24765-fb73-49bf-9d60-f8f4d97ca94a",
+      "name": "JS Code - Intent Router"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_NUMBER_ID }}",
+        "recipientPhoneNumber": "={{ $('JS Code - Extract WhatsApp Payload').first().json.phone }}",
+        "textBody": "تم إستلام الطلب وجاري العمل عليه، وسيتم المتابعة مع حضرتكم من خلال أحد ممثلي الخدمة.\nبرجاء العلم أن خدمة العملاء متاحة يوميا من الساعة 10 ص حتي 10 مـ  ماعدا يوم الجمعة.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1776,
+        -176
+      ],
+      "id": "04baa2f8-8d38-4bba-aece-db14cb941e36",
+      "name": "WhatsApp - Static Response1",
+      "webhookId": "9f043a40-d6ec-4174-ac72-eb5250b3597c",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "KewR5mMgcVKkPhxW",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_NUMBER_ID }}",
+        "recipientPhoneNumber": "={{ $('JS Code - Extract WhatsApp Payload').first().json.phone }}",
+        "textBody": "={{ $json.static_response }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        2160,
+        384
+      ],
+      "id": "6e22da19-3657-477d-a192-a08bb0801e6f",
+      "name": "WhatsApp - Static Response2",
+      "webhookId": "9f043a40-d6ec-4174-ac72-eb5250b3597c",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "KewR5mMgcVKkPhxW",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.messages (message_id, lead_id, message_type, content, media_id, created_at)\nVALUES ($1, $2, $3, $4, $5, $6)\nON CONFLICT (message_id, created_at) \nDO UPDATE SET \n    content = EXCLUDED.content,\n    message_type = EXCLUDED.message_type,\n    media_id = EXCLUDED.media_id\nRETURNING content;",
+        "options": {
+          "queryReplacement": "={{ $('JS Code - Extract WhatsApp Payload').first().json.message_id }}, {{ $('PostgreSQL - UPSERT Lead').first().json.lead_id }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.message_type }}, {{ JSON.stringify($json).includes('audio') }} ? {{ $('JS Code - Manage Audio Transcription').first().json.text }} : {{ $('JS Code - Extract WhatsApp Payload').first().json.content }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.media_id }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.timestamp }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1184,
+        64
+      ],
+      "id": "fb249f40-ee6c-4918-a7a4-02c0c0c48175",
+      "name": "PostgreSQL - UPSERT Audio Messages",
+      "credentials": {
+        "postgres": {
+          "id": "I2wKRgGVQTdS8Nyj",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.messages (message_id, lead_id, message_type, content, created_at)\nVALUES ($1, $2, $3, $4, $5)\nON CONFLICT (message_id, created_at) \nDO UPDATE SET \n    content = EXCLUDED.content,\n    message_type = EXCLUDED.message_type,\n    media_id = EXCLUDED.media_id\nRETURNING content;",
+        "options": {
+          "queryReplacement": "={{ $('JS Code - Extract WhatsApp Payload').first().json.message_id }}, {{ $('PostgreSQL - UPSERT Lead').first().json.lead_id }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.message_type }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.content }}, {{ $('JS Code - Extract WhatsApp Payload').first().json.timestamp }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1184,
+        -240
+      ],
+      "id": "a6a24c22-ecda-4cb6-a0e7-f2012b101ffb",
+      "name": "PostgreSQL - UPSERT Text Messages",
+      "credentials": {
+        "postgres": {
+          "id": "I2wKRgGVQTdS8Nyj",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "STATIC",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "9ec29ba6-9a51-42e6-8b95-61bbbbbf92f7"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "STATIC"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "3499f4a6-1943-4ad2-936e-f17ea67a3d84",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "HANDOFF",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "HANDOFF"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "df8faae2-5310-4cc7-9632-986481faec1b",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "GENERAL_QUERY",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "AGENT"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1488,
+        544
+      ],
+      "id": "b013a637-fb82-47a8-8f61-1e36db6bb9dc",
+      "name": "Switch - Intent Router"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=*Customer Support Ticket*\n\n• *Timestamp:* `{{ $('JS Code - Extract WhatsApp Payload').first().json.timestamp }}`\n\n• *Lead Id:* `{{ $('PostgreSQL - UPSERT Lead').first().json.lead_id }}`\n\n• *Name:* `{{ $('PostgreSQL - UPSERT Lead').first().json.full_name }}`\n\n• *Phone Number:* `{{ $('JS Code - Extract WhatsApp Payload').first().json.phone }}`\n\n• *Last Message:* `{{ $('JS Code - Extract WhatsApp Payload').first().json.content }}`\n\n ",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2400,
+        560
+      ],
+      "id": "e965eee5-96a9-40f4-8994-84f4380b8142",
+      "name": "Telegram - Customer Support Ticket",
+      "webhookId": "3b508eab-23e2-48db-9a03-7e52e5f3d2e3",
+      "credentials": {
+        "telegramApi": {
+          "id": "xeuD11yuKLwVB8vu",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE public.leads \nSET lead_status = 'HUMAN_HANDOFF'\nWHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('PostgreSQL - UPSERT Lead').first().json.lead_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2160,
+        560
+      ],
+      "id": "ba09d070-a762-4d15-9f4b-0daff9bc6cb6",
+      "name": "Postgres - UPDATE Lead Status HANDOFF",
+      "credentials": {
+        "postgres": {
+          "id": "I2wKRgGVQTdS8Nyj",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "You are a helpful assistant"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -688,
+        816
+      ],
+      "id": "fa17e761-0348-4181-b76c-2d8f972268a6",
+      "name": "AI Agent",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -944,
+        1056
+      ],
+      "id": "0fac3b68-87c4-42ee-9659-d4d2cdf88e94",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "ciWgYIQy2Zlljnw5",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openrouter/free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -768,
+        1056
+      ],
+      "id": "2adc474e-2756-4f43-b1c2-99f9ce720aaa",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "yBWGPu8jk4RymHZI",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 7
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [
+        -592,
+        1056
+      ],
+      "id": "002e4b83-8955-47a1-ba88-d9f13c989d0a",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "I2wKRgGVQTdS8Nyj",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "={{ $env.MCP_URL }}",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.4,
+      "position": [
+        -416,
+        1056
+      ],
+      "id": "68bd160f-678e-4abd-aa04-880443556025",
+      "name": "MCP Client",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uc2vRPlKwadsN29D",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - WhatsApp Inbound": {
+      "main": [
+        [
+          {
+            "node": "JS Code - Verify Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JS Code - Verify Signature": {
+      "main": [
+        [
+          {
+            "node": "JS Code - Is Message Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Meta Verification": {
+      "main": [
+        [
+          {
+            "node": "If - Verify Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If - Verify Token": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JS Code - Is Message Event": {
+      "main": [
+        [
+          {
+            "node": "JS Code - Extract WhatsApp Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Download Media File": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Groq Whisper STT",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Postgres - INSERT system_logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Groq Whisper STT": {
+      "main": [
+        [
+          {
+            "node": "JS Code - Manage Audio Transcription",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Postgres - INSERT system_logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - UPSERT Lead": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL - Idempotency Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JS Code - Manage Audio Transcription": {
+      "main": [
+        [
+          {
+            "node": "If - Is Audio Clean",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If - Is Audio Clean": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL - UPSERT Audio Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "WhatsApp - Unclear Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - Idempotency Check": {
+      "main": [
+        [
+          {
+            "node": "If - New Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If - New Event": {
+      "main": [
+        [
+          {
+            "node": "Switch - Text OR Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JS Code - Is Message Event - Test": {
+      "main": [
+        []
+      ]
+    },
+    "JS Code - Extract WhatsApp Payload - Test": {
+      "main": [
+        []
+      ]
+    },
+    "JS Code - Extract WhatsApp Payload": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL - UPSERT Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Text OR Audio": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL - UPSERT Text Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request - Download Media File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - UPDATE messages audio_error": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL - UPDATE leads human_handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - UPDATE leads human_handoff": {
+      "main": [
+        []
+      ]
+    },
+    "Telegram - Whisper Error Notification": {
+      "main": [
+        []
+      ]
+    },
+    "Telegram - Error Notification": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp - Static Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp - Unclear Audio": {
+      "main": [
+        [
+          {
+            "node": "Edit Content & Type Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Content & Type Fields": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL - UPSERT messages unclear_audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp - Static Response": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL - UPDATE messages audio_error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - INSERT system_logs": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If - HUMAN_HANDOFF": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp - Static Response1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "JS Code - Intent Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JS Code - Intent Router": {
+      "main": [
+        [
+          {
+            "node": "Switch - Intent Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - UPSERT Audio Messages": {
+      "main": [
+        [
+          {
+            "node": "If - HUMAN_HANDOFF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - UPSERT Text Messages": {
+      "main": [
+        [
+          {
+            "node": "If - HUMAN_HANDOFF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Intent Router": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp - Static Response2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "WhatsApp - Static Response2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Postgres - UPDATE Lead Status HANDOFF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Customer Support Ticket": {
+      "main": [
+        []
+      ]
+    },
+    "Postgres - UPDATE Lead Status HANDOFF": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Customer Support Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        []
+      ]
+    },
+    "MCP Client": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a773b390-58d6-4432-a01b-eb6c0a7e2813",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": ""
+  },
+  "nodeGroups": [],
+  "id": "uMKurUf0BIcagjnf",
+  "tags": []
+}
